@@ -1,11 +1,10 @@
 import aiohttp
 import asyncio
 import logging
+import re
 from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
-
-MASH_SYSTEM_PROMPT = """Ты — Маша, главный редактор федерального медиа. Отвечай живо, грамотно, с лёгким юмором. Не используй Markdown."""
 
 class AIAgent:
     def __init__(self, api_key: str, model: str):
@@ -16,27 +15,43 @@ class AIAgent:
 
     async def _get_session(self):
         if self._session is None:
-            connector = aiohttp.TCPConnector(ssl=False)
-            self._session = aiohttp.ClientSession(connector=connector)
+            connector = aiohttp.TCPConnector(ssl=False, timeout=30)
+            timeout = aiohttp.ClientTimeout(total=120)
+            self._session = aiohttp.ClientSession(connector=connector, timeout=timeout)
         return self._session
 
     def _get_style_prompt(self, style_name: str) -> str:
         styles = {
-            "блог": "Пиши живо, эмоционально, как в личном блоге.",
-            "официально-деловой": "Пиши официально, сухо, канцеляритом.",
-            "детский": "Объясняй просто, как для пятилетнего.",
-            "ироничный": "Будь ироничной, но не злой.",
-            "мотивационный": "Заряжай энергией, вдохновляй."
+            "редактура": "Ты главный редактор. Отредактируй текст: убери AI-слова, канцелярит, шаблоны. Сделай живым и естественным. Сохрани смысл, измени форму. Пиши как человек: без маркдауна, без жирного текста.",
+            "разговорный": "Ты Маша, приятная собеседница. Отвечай как живой человек: коротко, по делу, с душой. Без шаблонов и канцелярита. Можешь шутить, удивляться, задавать вопросы.",
+            "блог": "Пиши как блогер: живо, эмоционально, с восклицаниями. Как другу в мессенджере.",
+            "официально-деловой": "Пиши официально, сухо, по делу. Как документ.",
+            "детский": "Объясняй просто, как пятилетнему. Тепло и дружелюбно.",
+            "ироничный": "С мягкой иронией, добрым сарказмом.",
+            "мотивационный": "Заряжай энергией, вдохновляй. Коротко и бодро.",
+            "академический": "Как научная статья: термины, объективность, сухо.",
+            "технический": "Чётко, структурированно, с терминами.",
+            "поэтический": "Образно, метафорично, красиво.",
+            "журналистский": "Факты, короткие абзацы, цепляющий заголовок.",
         }
-        return styles.get(style_name, f"Пиши в стиле {style_name}.")
+        return styles.get(style_name, styles.get("разговорный"))
+
+    def _clean_text(self, text: str) -> str:
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+        text = re.sub(r'\*(.+?)\*', r'\1', text)
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        return text.strip()
 
     async def generate_response(self, user_message: str, history: List[Dict], user_id: int) -> Tuple[str, str]:
         messages = []
         
         if self.current_style:
-            messages.append({"role": "system", "content": f"{MASH_SYSTEM_PROMPT}\n\n{self._get_style_prompt(self.current_style)}"})
+            style_prompt = self._get_style_prompt(self.current_style)
+            messages.append({"role": "system", "content": style_prompt})
         else:
-            messages.append({"role": "system", "content": MASH_SYSTEM_PROMPT})
+            messages.append({"role": "system", "content": "Ты Маша, главный редактор. Отвечай живо, по делу, как человек. Без шаблонов и канцелярита."})
         
         if history:
             messages.extend(history[-10:])
@@ -54,40 +69,47 @@ class AIAgent:
             "model": self.model,
             "messages": messages,
             "temperature": 0.85,
-            "max_tokens": 1500
+            "max_tokens": 1000
         }
         
-        try:
-            async with session.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=60,
-                ssl=False
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data["choices"][0]["message"]["content"], "success"
-                elif response.status == 429:
-                    return "Слишком много запросов. Подожди 10 секунд и попробуй ещё раз!", "error"
-                else:
-                    error_text = await response.text()
-                    logger.error(f"API Error {response.status}: {error_text}")
-                    return f"Ошибка API: {response.status}. Попробуй ещё раз!", "error"
-        except asyncio.TimeoutError:
-            return "Сервер не отвечает. Попробуй ещё раз!", "error"
-        except Exception as e:
-            logger.error(f"OpenRouter error: {e}")
-            return "🔧 Технические шоколадки... Повтори запрос через минуту!", "error"
+        fallback_models = ["openai/gpt-3.5-turbo", "anthropic/claude-3-haiku", "meta-llama/llama-3-8b-instruct"]
+        
+        for attempt, model in enumerate([self.model] + fallback_models):
+            try:
+                payload["model"] = model
+                async with session.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=90
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        raw_text = data["choices"][0]["message"]["content"]
+                        cleaned = self._clean_text(raw_text)
+                        return cleaned, "success"
+                    elif response.status == 429:
+                        await asyncio.sleep(2)
+                        continue
+                    else:
+                        continue
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout with model {model}")
+                continue
+            except Exception as e:
+                logger.error(f"OpenRouter error with {model}: {e}")
+                continue
+        
+        return "Извини, сервер сейчас перегружен. Попробуй ещё раз через минуту.", "error"
 
     def set_style(self, style_name: str) -> bool:
-        styles = ["блог", "официально-деловой", "детский", "ироничный", "мотивационный", "default"]
+        styles = ["редактура", "разговорный", "блог", "официально-деловой", "детский", 
+                  "ироничный", "мотивационный", "академический", "технический", 
+                  "поэтический", "журналистский", "default"]
         if style_name in styles:
             self.current_style = None if style_name == "default" else style_name
             return True
         return False
 
     def get_current_style(self) -> str:
-        return "стандартный (Маша)" if self.current_style is None else self.current_style
-
-from config import config
+        return "стандартный" if self.current_style is None else self.current_style
