@@ -18,48 +18,35 @@ MODE_EDITOR = "editor"
 MODE_CONVERSATION = "conversation"
 user_modes = {}
 
+RELATIONSHIP_ADVICE = {
+    "i_statements": "Формула я-высказывания: Я чувствую [эмоция], когда [ситуация], потому что [влияние].\nПример: Я чувствую одиночество, когда мы долго не разговариваем, потому что мне важно быть в контакте.",
+    "active_listening": "Активное слушание:\n• Отрази: 'Я слышу, что ты говоришь...'\n• Подтверди: 'Это понятно, потому что...'\n• Уточни: 'Ты имеешь в виду...?'\n• Не готовь ответ, пока слушаешь.",
+    "boundaries": "Границы в общении:\n• Чётко назови свою потребность\n• Без оправданий: 'Мне сейчас нужно 10 минут тишины'\n• Предложи альтернативу: 'Можем обсудить это через час?'",
+}
+
 def is_addressed_to_me(update: Update) -> bool:
     if not update.message:
         return False
-    
-    message = update.message
-    text = message.text or ""
-    text_lower = text.lower()
-    
-    if f"@{BOT_USERNAME}" in text:
+    text = update.message.text or ""
+    if f"@{BOT_USERNAME}" in text or "маша" in text.lower():
         return True
-    
-    if "маша" in text_lower:
-        if re.search(r'\bмаша\b', text_lower):
+    if update.message.reply_to_message and update.message.reply_to_message.from_user and update.message.reply_to_message.from_user.is_bot:
+        if update.message.reply_to_message.from_user.username == BOT_USERNAME:
             return True
-    
-    if message.reply_to_message:
-        if message.reply_to_message.from_user and message.reply_to_message.from_user.is_bot:
-            if message.reply_to_message.from_user.username == BOT_USERNAME:
-                return True
-    
-    if message.chat.type == "private":
+    if update.message.chat.type == "private":
         return True
-    
     return False
 
 async def start_command(update: Update, context):
     if not is_addressed_to_me(update):
         return
-    
     user_id = update.effective_user.id
     user_modes[user_id] = MODE_EDITOR
-    
     await start(update, context)
     await update.message.reply_text(
-        f"Обращаться ко мне можно:\n"
-        f"• @{BOT_USERNAME}\n"
-        f"• {BOT_NAME}\n\n"
-        f"Режимы:\n"
-        f"/editor_mode — только редактура текста\n"
-        f"/conversation_mode — живое общение\n"
-        f"/smart_mode — сама определю\n\n"
-        f"В группе отвечаю только когда ко мне обращаются."
+        f"Обращаться ко мне можно:\n• @{BOT_USERNAME}\n• {BOT_NAME}\n\n"
+        f"Режимы:\n/editor_mode — только редактура\n/conversation_mode — живое общение\n/smart_mode — сама определю\n\n"
+        f"Я могу помочь с отношениями, конфликтами, свиданиями, общением. Спроси меня, как улучшить отношения или как помириться."
     )
 
 async def help_command_group(update: Update, context):
@@ -87,14 +74,14 @@ async def editor_mode(update: Update, context):
         return
     user_id = update.effective_user.id
     user_modes[user_id] = MODE_EDITOR
-    await update.message.reply_text("📝 Режим редактора: буду редактировать тексты, исправлять ошибки, улучшать стиль.")
+    await update.message.reply_text("📝 Режим редактора: редактирую тексты, исправляю ошибки, улучшаю стиль.")
 
 async def conversation_mode(update: Update, context):
     if not is_addressed_to_me(update):
         return
     user_id = update.effective_user.id
     user_modes[user_id] = MODE_CONVERSATION
-    await update.message.reply_text("💬 Режим общения: могу поговорить на любые темы, поддержать диалог, поделиться мнением.")
+    await update.message.reply_text("💬 Режим общения: могу поговорить на любые темы — отношения, чувства, планы, литература, жизнь.")
 
 async def smart_mode(update: Update, context):
     if not is_addressed_to_me(update):
@@ -106,7 +93,6 @@ async def smart_mode(update: Update, context):
 async def handle_message(update: Update, context):
     if not update.message or not update.message.text:
         return
-    
     if not is_addressed_to_me(update):
         return
     
@@ -120,22 +106,30 @@ async def handle_message(update: Update, context):
         await update.message.reply_text(f"Да, {BOT_NAME} здесь! Чем могу помочь?")
         return
     
-    mode = user_modes.get(user_id)
+    lower = user_text.lower()
+    if "i statement" in lower or "я-высказывание" in lower:
+        await update.message.reply_text(RELATIONSHIP_ADVICE["i_statements"])
+        return
+    if "активное слушание" in lower or "active listening" in lower:
+        await update.message.reply_text(RELATIONSHIP_ADVICE["active_listening"])
+        return
+    if "границы" in lower or "boundaries" in lower:
+        await update.message.reply_text(RELATIONSHIP_ADVICE["boundaries"])
+        return
+    if "отношения" in lower or "relationship" in lower:
+        await update.message.reply_text("💞 Отношения — это важно. Я могу помочь:\n• Подобрать слова для сложного разговора\n• Предложить идеи для свиданий\n• Помочь помириться после ссоры\n• Просто выслушать и поддержать.\nРасскажи, что случилось?")
+        return
     
+    mode = user_modes.get(user_id)
     ai_agent: AIAgent = context.bot_data.get('ai_agent')
     if not ai_agent:
         await update.message.reply_text("Технические работы.")
         return
     
-    if mode == MODE_EDITOR:
+    if mode == MODE_EDITOR or (mode is None and any(w in lower for w in ["отредактируй", "исправь", "проверь"])):
         ai_agent.set_style("редактура")
-    elif mode == MODE_CONVERSATION:
-        ai_agent.set_style("разговорный")
     else:
-        if any(word in user_text.lower() for word in ["отредактируй", "исправь", "проверь грамматику"]):
-            ai_agent.set_style("редактура")
-        else:
-            ai_agent.set_style("разговорный")
+        ai_agent.set_style("разговорный")
     
     session = get_session(user_id)
     history = session.get_history()
@@ -148,10 +142,8 @@ async def handle_message(update: Update, context):
 
 def main():
     ai_agent = AIAgent(config.OPENROUTER_API_KEY, config.OPENROUTER_MODEL)
-    
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
     app.bot_data['ai_agent'] = ai_agent
-    
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command_group))
     app.add_handler(CommandHandler("styles", styles_command_group))
@@ -166,8 +158,8 @@ def main():
     print(f"{BOT_NAME} ЗАПУЩЕНА")
     print(f"Реагирует на: @{BOT_USERNAME}, {BOT_NAME}")
     print("Режимы: /editor_mode, /conversation_mode, /smart_mode")
+    print("💝 Новые навыки: советы по отношениям, коммуникация, конфликты")
     print("=" * 50)
-    
     app.run_polling(allowed_updates=["message", "callback_query"])
 
 if __name__ == "__main__":
