@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: masha-editor-bot
+    name: masha-bot
     runtime: python
     region: frankfurt
     plan: free
@@ -12,8 +12,8 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_MODEL
-        value: google/gemini-2.0-flash-exp:free
+        value: openai/gpt-oss-120b:free
       - key: MAX_HISTORY_LENGTH
-        value: 15
+        value: 20
       - key: LOG_LEVEL
         value: INFO

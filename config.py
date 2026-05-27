@@ -6,9 +6,8 @@ load_dotenv()
 class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
-    OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-    MAX_HISTORY_LENGTH = int(os.getenv("MAX_HISTORY_LENGTH", 15))
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b:free")
+    MAX_HISTORY_LENGTH = int(os.getenv("MAX_HISTORY_LENGTH", 20))
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     
     @classmethod

@@ -4,8 +4,8 @@ from datetime import datetime
 
 def setup_logging(log_level: str = "INFO"):
     os.makedirs("logs", exist_ok=True)
+    os.makedirs("images", exist_ok=True)
     
-    # Отключаем шумные библиотеки
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     
