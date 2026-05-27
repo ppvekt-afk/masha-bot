@@ -30,8 +30,7 @@ def is_addressed_to_me(update: Update) -> bool:
         return True
     
     if "маша" in text_lower:
-        pattern = r'\bмаша\b'
-        if re.search(pattern, text_lower):
+        if re.search(r'\bмаша\b', text_lower):
             return True
     
     if message.reply_to_message:
@@ -60,7 +59,7 @@ async def start_command(update: Update, context):
         f"/editor_mode — только редактура текста\n"
         f"/conversation_mode — живое общение\n"
         f"/smart_mode — сама определю\n\n"
-        f"В группе отвечаю только когда ко мне обращаются. Готова помочь с текстами!"
+        f"В группе отвечаю только когда ко мне обращаются."
     )
 
 async def help_command_group(update: Update, context):
@@ -95,10 +94,7 @@ async def conversation_mode(update: Update, context):
         return
     user_id = update.effective_user.id
     user_modes[user_id] = MODE_CONVERSATION
-    await update.message.reply_text(
-        "💬 Режим общения: могу поговорить на любые темы, поддержать диалог, поделиться мнением.\n\n"
-        "Спрашивай о чём хочешь — литература, новости, жизнь, путешествия, кулинария..."
-    )
+    await update.message.reply_text("💬 Режим общения: могу поговорить на любые темы, поддержать диалог, поделиться мнением.")
 
 async def smart_mode(update: Update, context):
     if not is_addressed_to_me(update):
