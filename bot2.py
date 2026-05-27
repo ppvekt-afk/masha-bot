@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import logging
+import threading
+from flask import Flask, jsonify
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from config import config
@@ -9,15 +11,35 @@ from utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
+# Flask приложение для health check
+flask_app = Flask(__name__)
+
+@flask_app.route('/')
+def health():
+    return jsonify({"status": "alive", "service": "masha-editor-bot"})
+
+@flask_app.route('/health')
+def health_check():
+    return jsonify({"status": "ok"})
+
+def run_flask():
+    """Запускает Flask сервер на порту 8080"""
+    flask_app.run(host='0.0.0.0', port=8080)
+
 def main():
     setup_logging(config.LOG_LEVEL)
-    logger.info("Запуск бота Маша (bot2.py)")
+    logger.info("Запуск бота — Маша, Главный редактор")
     
     try:
         config.validate()
     except ValueError as e:
-        logger.error(f"Ошибка: {e}")
+        logger.error(f"Ошибка конфигурации: {e}")
         return
+    
+    # Запускаем Flask в отдельном потоке
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    logger.info("Flask сервер запущен на порту 8080")
     
     ai_agent = AIAgent(config.OPENROUTER_API_KEY, config.OPENROUTER_MODEL)
     
@@ -30,7 +52,7 @@ def main():
     application.add_handler(CommandHandler("reset", reset))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    logger.info("✅ Бот запущен!")
+    logger.info("✅ Бот Маши запущен!")
     application.run_polling()
 
 if __name__ == "__main__":
