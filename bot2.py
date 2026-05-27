@@ -1,4 +1,3 @@
-cat > bot2.py << 'EOF'
 #!/usr/bin/env python3
 import logging
 import threading
@@ -35,7 +34,6 @@ def main():
         logger.error(f"Ошибка конфигурации: {e}")
         return
     
-    # Flask для Render
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info("Flask сервер запущен на порту 8080")
@@ -57,4 +55,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-EOF
