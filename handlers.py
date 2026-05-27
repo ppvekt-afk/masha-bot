@@ -36,7 +36,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*/help* — список команд\n"
         "*/reset* — сбросить историю\n\n"
         "Просто напиши мне что-нибудь! ✨",
-        parse_mode="Markdown"
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,7 +45,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Смена стиля:* напиши «в стиле блога», «официально-деловым», «детским», «ироничным»\n\n"
         f"*Доступные стили:*\n{styles_list}\n\n"
         f"*Вернуть обычный стиль:* «верни обычный стиль»",
-        parse_mode="Markdown"
     )
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
