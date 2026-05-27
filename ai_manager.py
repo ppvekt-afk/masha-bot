@@ -137,4 +137,3 @@ class AIAgent:
         return self.memory.get_user_profile(user_id)
 
 from config import config
-EOF
