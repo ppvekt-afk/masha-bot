@@ -1,4 +1,3 @@
-cat > memory.py << 'EOF'
 import json
 import os
 from datetime import datetime
