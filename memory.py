@@ -125,4 +125,4 @@ class MemorySystem:
             "total_messages": total_messages,
             "common_topics": common_topics
         }
-EOF
+        
