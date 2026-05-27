@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: masha-editor-bot
+    runtime: python
+    region: frankfurt
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot2.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: google/gemini-2.0-flash-exp:free
+      - key: MAX_HISTORY_LENGTH
+        value: 15
+      - key: LOG_LEVEL
+        value: INFO
