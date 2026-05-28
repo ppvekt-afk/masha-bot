@@ -1,7 +1,6 @@
 import aiohttp
 import asyncio
 import logging
-import re
 from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -15,34 +14,26 @@ class AIAgent:
 
     async def _get_session(self):
         if self._session is None:
-            connector = aiohttp.TCPConnector(ssl=False, timeout=30)
-            timeout = aiohttp.ClientTimeout(total=120)
+            connector = aiohttp.TCPConnector(ssl=False)
+            timeout = aiohttp.ClientTimeout(total=60)
             self._session = aiohttp.ClientSession(connector=connector, timeout=timeout)
         return self._session
 
     def _get_style_prompt(self, style_name: str) -> str:
         styles = {
-            "редактура": "Ты главный редактор. Отредактируй текст: убери AI-слова, канцелярит, шаблоны. Сделай живым и естественным. Сохрани смысл, измени форму. Пиши как человек: без маркдауна, без жирного текста.",
-            "разговорный": "Ты Маша, приятная собеседница. Отвечай как живой человек: коротко, по делу, с душой. Без шаблонов и канцелярита. Можешь шутить, удивляться, задавать вопросы.",
-            "блог": "Пиши как блогер: живо, эмоционально, с восклицаниями. Как другу в мессенджере.",
-            "официально-деловой": "Пиши официально, сухо, по делу. Как документ.",
-            "детский": "Объясняй просто, как пятилетнему. Тепло и дружелюбно.",
+            "редактура": "Ты главный редактор. Отредактируй текст: убери AI-слова, канцелярит, шаблоны. Сделай живым и естественным.",
+            "разговорный": "Ты Маша, приятная собеседница. Отвечай как живой человек: коротко, по делу, с душой.",
+            "блог": "Пиши как блогер: живо, эмоционально, с восклицаниями.",
+            "официально-деловой": "Пиши официально, сухо, по делу.",
+            "детский": "Объясняй просто, как пятилетнему.",
             "ироничный": "С мягкой иронией, добрым сарказмом.",
-            "мотивационный": "Заряжай энергией, вдохновляй. Коротко и бодро.",
-            "академический": "Как научная статья: термины, объективность, сухо.",
+            "мотивационный": "Заряжай энергией, вдохновляй.",
+            "академический": "Как научная статья: термины, объективность.",
             "технический": "Чётко, структурированно, с терминами.",
             "поэтический": "Образно, метафорично, красиво.",
             "журналистский": "Факты, короткие абзацы, цепляющий заголовок.",
         }
-        return styles.get(style_name, styles.get("разговорный"))
-
-    def _clean_text(self, text: str) -> str:
-        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-        text = re.sub(r'\*(.+?)\*', r'\1', text)
-        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
-        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
-        text = re.sub(r'`([^`]+)`', r'\1', text)
-        return text.strip()
+        return styles.get(style_name, styles.get("разговорный", "Отвечай как человек."))
 
     async def generate_response(self, user_message: str, history: List[Dict], user_id: int) -> Tuple[str, str]:
         messages = []
@@ -51,7 +42,7 @@ class AIAgent:
             style_prompt = self._get_style_prompt(self.current_style)
             messages.append({"role": "system", "content": style_prompt})
         else:
-            messages.append({"role": "system", "content": "Ты Маша, главный редактор. Отвечай живо, по делу, как человек. Без шаблонов и канцелярита."})
+            messages.append({"role": "system", "content": "Ты Маша, главный редактор. Отвечай как человек: без шаблонов и канцелярита."})
         
         if history:
             messages.extend(history[-10:])
@@ -74,20 +65,22 @@ class AIAgent:
         
         fallback_models = ["openai/gpt-3.5-turbo", "anthropic/claude-3-haiku", "meta-llama/llama-3-8b-instruct"]
         
-        for attempt, model in enumerate([self.model] + fallback_models):
+        for model in [self.model] + fallback_models:
             try:
                 payload["model"] = model
                 async with session.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers,
                     json=payload,
-                    timeout=90
+                    timeout=60
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
                         raw_text = data["choices"][0]["message"]["content"]
-                        cleaned = self._clean_text(raw_text)
-                        return cleaned, "success"
+                        import re
+                        raw_text = re.sub(r'\*\*(.+?)\*\*', r'\1', raw_text)
+                        raw_text = re.sub(r'\*(.+?)\*', r'\1', raw_text)
+                        return raw_text.strip(), "success"
                     elif response.status == 429:
                         await asyncio.sleep(2)
                         continue
@@ -97,10 +90,10 @@ class AIAgent:
                 logger.warning(f"Timeout with model {model}")
                 continue
             except Exception as e:
-                logger.error(f"OpenRouter error with {model}: {e}")
+                logger.error(f"Error with model {model}: {e}")
                 continue
         
-        return "Извини, сервер сейчас перегружен. Попробуй ещё раз через минуту.", "error"
+        return "Извини, сейчас не могу ответить. Попробуй ещё раз.", "error"
 
     def set_style(self, style_name: str) -> bool:
         styles = ["редактура", "разговорный", "блог", "официально-деловой", "детский", 
